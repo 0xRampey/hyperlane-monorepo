@@ -48,7 +48,7 @@ abstract contract AbstractOptimisticIsm is IOptimisticIsm {
      * @return watchers The array of validator addresses
      * @return threshold The number of validator signatures needed
      */
-    function watchersAndThreshold(bytes calldata)
+    function watchersAndThreshold(bytes memory)
         public
         view
         virtual
@@ -75,6 +75,43 @@ abstract contract AbstractOptimisticIsm is IOptimisticIsm {
         return true;
     }
 
+    modifier onlyWatcher() {
+        require(_isWatcher(msg.sender), "Caller is not a watcher");
+        _;
+    }
+
+    function _isWatcher(address _watcher) private view returns (bool) {
+        (address[] memory _watchers, ) = watchersAndThreshold(
+            abi.encodePacked("")
+        );
+
+        for (uint256 i = 0; i < _watchers.length; i++) {
+            if (_watchers[i] == _watcher) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    mapping(address => bool) private _watcherMarkedFraudulent;
+    uint256 _fraudulentCount = 0;
+
+    /**
+     * @notice Allows watchers to flag the ISM subModule as fraudulent
+     * @param _ism Address of ISM subModule
+     *
+     */
+    function markFraudulent(address _ism) external onlyWatcher returns (bool) {
+        // Add check here for the _ism address
+        require(
+            !_watcherMarkedFraudulent[msg.sender],
+            "Watcher has already marked fraudulent"
+        );
+        _watcherMarkedFraudulent[msg.sender] = true;
+        _fraudulentCount += 1;
+        return true;
+    }
+
     /**
      * @notice Requires that m-of-n watchers sign '_message'
      * and agree on fraudulence of '_message'
@@ -83,14 +120,58 @@ abstract contract AbstractOptimisticIsm is IOptimisticIsm {
      */
     function verify(bytes calldata _metadata, bytes calldata _message)
         public
-        view
         returns (bool)
     {
-        require(!_verifyWatcherSignatures(_metadata, _message), "!fraud");
+        require(preVerify(_metadata, _message), "!verify");
+        require(_verifySubIsmNotFraudulent(_message), "!fraud");
+        require(_verifyTargetBlockReached(_metadata, _message), "!wait");
+        // require(!_verifyWatcherSignatures(_metadata, _message), "!fraud");
         return true;
     }
 
     // ============ Private Functions ============
+
+    mapping(bytes32 => uint256) private _targetBlocks;
+
+    /**
+     * @notice Verifies that a quorum of watchers signed
+     * the given message.
+     * @param _metadata ABI encoded module metadata (see MultisigIsmMetadata.sol)
+     * @param _message Formatted Hyperlane message (see Message.sol).
+     */
+    function _verifyTargetBlockReached(
+        bytes calldata _metadata,
+        bytes calldata _message
+    ) internal returns (bool) {
+        bytes32 messageHash = keccak256(_message); //TODO: add metadat too here
+        uint256 targetBlock = _targetBlocks[messageHash];
+        if (targetBlock == 0) {
+            //First time we're dealing with this message
+            _targetBlocks[messageHash] = block.number + 10; // Fraud window here
+            return false;
+        }
+
+        if (block.number >= targetBlock) {
+            _targetBlocks[messageHash] = 0;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @notice Verifies that a quorum of watchers signed
+     * the given message.
+     */
+    function _verifySubIsmNotFraudulent(bytes calldata _message)
+        internal
+        view
+        returns (bool)
+    {
+        (, uint8 _threshold) = watchersAndThreshold(_message);
+        console.log(_threshold);
+
+        return !(_fraudulentCount >= _threshold);
+    }
 
     /**
      * @notice Verifies that a quorum of watchers signed

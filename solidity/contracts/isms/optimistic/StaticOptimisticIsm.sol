@@ -20,7 +20,7 @@ contract StaticOptimisticIsm is AbstractOptimisticIsm {
      * @return watchers The array of watcher addresses
      * @return threshold The number of signatures needed to verify
      */
-    function watchersAndThreshold(bytes calldata)
+    function watchersAndThreshold(bytes memory)
         public
         view
         virtual

@@ -36,4 +36,11 @@ interface IOptimisticIsm is IInterchainSecurityModule {
     function preVerify(bytes calldata _metadata, bytes calldata _message)
         external
         returns (bool);
+
+    /**
+     * @notice Allows watchers to flag the ISM subModule as fraudulent
+     * @param _ism Address of ISM subModule
+     *
+     */
+    function markFraudulent(address _ism) external returns (bool);
 }

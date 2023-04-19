@@ -56,7 +56,7 @@ contract OptimisticIsmTest is Test {
         uint8 m,
         uint8 n,
         bytes32 seed
-    ) private returns (uint256[] memory) {
+    ) private returns (address[] memory) {
         uint256[] memory keys = new uint256[](n);
         address[] memory addresses = new address[](n);
         for (uint256 i = 0; i < n; i++) {
@@ -66,7 +66,7 @@ contract OptimisticIsmTest is Test {
         }
         TestIsm subIsm = TestIsm(deployIsm(seed));
         ism = IOptimisticIsm(factory.deploy(addresses, m, address(subIsm)));
-        return keys;
+        return addresses;
     }
 
     function getMessage(
@@ -121,34 +121,34 @@ contract OptimisticIsmTest is Test {
         bytes memory message
     ) private returns (bytes memory) {
         uint32 domain = mailbox.localDomain();
-        uint256[] memory keys = addWatchersAndPreVerifyIsm(m, n, seed);
-        uint256[] memory signers = MOfNTestUtils.choose(m, keys, seed);
+        address[] memory watchers = addWatchersAndPreVerifyIsm(m, n, seed);
+        // uint256[] memory signers = MOfNTestUtils.choose(m, keys, seed);
 
         bytes32 digest = keccak256(message);
 
         bytes memory metadata = getPreVerifyMetadata(seed);
 
-        for (uint256 i = 0; i < signers.length; i++) {
-            (uint8 v, bytes32 r, bytes32 s) = vm.sign(signers[i], digest);
-            metadata = abi.encodePacked(metadata, r, s, v);
-        }
+        // for (uint256 i = 0; i < signers.length; i++) {
+        //     (uint8 v, bytes32 r, bytes32 s) = vm.sign(signers[i], digest);
+        //     metadata = abi.encodePacked(metadata, r, s, v);
+        // }
         return metadata;
     }
 
-    function testVerifyFailWithMOfNWatcherSigs(
-        uint32 destination,
-        bytes32 recipient,
-        bytes calldata body,
-        uint8 m,
-        uint8 n,
-        bytes32 seed
-    ) public {
-        vm.assume(0 < m && m <= n && n < 10);
-        bytes memory message = getMessage(destination, recipient, body);
-        bytes memory metadata = getMetadata(m, n, seed, message);
-        vm.expectRevert(bytes("!fraud"));
-        ism.verify(metadata, message);
-    }
+    // function testVerifyFailWithMOfNWatcherSigs(
+    //     uint32 destination,
+    //     bytes32 recipient,
+    //     bytes calldata body,
+    //     uint8 m,
+    //     uint8 n,
+    //     bytes32 seed
+    // ) public {
+    //     vm.assume(0 < m && m <= n && n < 10);
+    //     bytes memory message = getMessage(destination, recipient, body);
+    //     bytes memory metadata = getMetadata(m, n, seed, message);
+    //     vm.expectRevert(bytes("!fraud"));
+    //     ism.verify(metadata, message);
+    // }
 
     function testPreVerify(
         uint32 destination,
@@ -163,4 +163,65 @@ contract OptimisticIsmTest is Test {
         bytes memory metadata = getMetadata(m, n, seed, message);
         assertTrue(ism.preVerify(metadata, message));
     }
+
+    function testMarkFraudulent(
+        uint8 m,
+        uint8 n,
+        bytes32 seed
+    ) public {
+        address[] memory watchers = addWatchersAndPreVerifyIsm(m, n, seed);
+        // Call the markFraudulent function from the watcher addresses
+        for (uint256 i = 0; i < watchers.length; i++) {
+            vm.prank(watchers[i]);
+            bool success = ism.markFraudulent(address(0xDEAD));
+
+            assertEq(
+                success,
+                true,
+                "Watcher should be able to mark fraudulent"
+            );
+        }
+    }
+
+    function testVerifyFailWithMOfNWatchers(
+        uint32 destination,
+        bytes32 recipient,
+        bytes calldata body,
+        uint8 m,
+        uint8 n,
+        bytes32 seed
+    ) public {
+        vm.assume(0 < m && m <= n && n < 10);
+        address[] memory watchers = addWatchersAndPreVerifyIsm(m, n, seed);
+        bytes memory metadata = getPreVerifyMetadata(seed);
+        bytes memory message = getMessage(destination, recipient, body);
+        for (uint256 i = 0; i < m; i++) {
+            vm.prank(watchers[i]);
+            ism.markFraudulent(address(0xDEAD));
+        }
+        vm.expectRevert("!fraud");
+        ism.verify(metadata, message);
+    }
+
+    function testVerifyFailWithFraudWindow(
+        uint32 destination,
+        bytes32 recipient,
+        bytes calldata body,
+        uint8 m,
+        uint8 n,
+        bytes32 seed
+    ) public {
+        vm.assume(0 < m && m <= n && n < 10);
+        address[] memory watchers = addWatchersAndPreVerifyIsm(m, n, seed);
+        bytes memory metadata = getPreVerifyMetadata(seed);
+        bytes memory message = getMessage(destination, recipient, body);
+        for (uint256 i = 0; i < m - 1; i++) {
+            vm.prank(watchers[i]);
+            ism.markFraudulent(address(0xDEAD));
+        }
+        vm.expectRevert("!wait");
+        ism.verify(metadata, message);
+    }
+
+    // TODO: Fraud window test!
 }
