@@ -30,11 +30,13 @@ abstract contract StaticMOfNAndKAddressSetFactory {
     function deploy(
         address[] calldata _values,
         uint8 _threshold,
+        uint32 _fraudWindow,
         address _address
     ) external returns (address) {
         (bytes32 _salt, bytes memory _bytecode) = _saltAndBytecode(
             _values,
             _threshold,
+            _fraudWindow,
             _address
         );
         address _set = _getAddress(_salt, _bytecode);
@@ -55,11 +57,13 @@ abstract contract StaticMOfNAndKAddressSetFactory {
     function getAddress(
         address[] calldata _values,
         uint8 _threshold,
+        uint32 _fraudWindow,
         address _address
     ) external view returns (address) {
         (bytes32 _salt, bytes memory _bytecode) = _saltAndBytecode(
             _values,
             _threshold,
+            _fraudWindow,
             _address
         );
         return _getAddress(_salt, _bytecode);
@@ -91,9 +95,15 @@ abstract contract StaticMOfNAndKAddressSetFactory {
     function _saltAndBytecode(
         address[] calldata _values,
         uint8 _threshold,
+        uint32 _fraudWindow,
         address _address
     ) private view returns (bytes32, bytes memory) {
-        bytes memory _metadata = abi.encode(_values, _threshold, _address);
+        bytes memory _metadata = abi.encode(
+            _values,
+            _threshold,
+            _fraudWindow,
+            _address
+        );
         bytes memory _bytecode = MetaProxy.bytecode(_implementation, _metadata);
         bytes32 _salt = keccak256(_metadata);
         return (_salt, _bytecode);

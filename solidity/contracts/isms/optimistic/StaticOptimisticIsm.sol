@@ -15,19 +15,23 @@ contract StaticOptimisticIsm is AbstractOptimisticIsm {
 
     /**
      * @notice Returns the set of watchers responsible for checking fraudulent _message
-     * and the number of signatures that must verify
+     * and the number of signatures that must be verifed and the window to verify by
      * @dev Can change based on the content of _message
      * @return watchers The array of watcher addresses
      * @return threshold The number of signatures needed to verify
      */
-    function watchersAndThreshold(bytes memory)
+    function watchersAndThresholdAndFraudWindow(bytes memory)
         public
         view
         virtual
         override
-        returns (address[] memory, uint8)
+        returns (
+            address[] memory,
+            uint8,
+            uint32
+        )
     {
-        return abi.decode(MetaProxy.metadata(), (address[], uint8));
+        return abi.decode(MetaProxy.metadata(), (address[], uint8, uint32));
     }
 
     /**
@@ -41,8 +45,15 @@ contract StaticOptimisticIsm is AbstractOptimisticIsm {
         override
         returns (address)
     {
-        (address[] memory _values, uint8 _threshold, address _address) = abi
-            .decode(MetaProxy.metadata(), (address[], uint8, address));
+        (
+            address[] memory _values,
+            uint8 _threshold,
+            uint32 _fraudWindow,
+            address _address
+        ) = abi.decode(
+                MetaProxy.metadata(),
+                (address[], uint8, uint32, address)
+            );
         return _address;
     }
 }

@@ -48,12 +48,16 @@ abstract contract AbstractOptimisticIsm is IOptimisticIsm {
      * @return watchers The array of validator addresses
      * @return threshold The number of validator signatures needed
      */
-    function watchersAndThreshold(bytes memory)
+    function watchersAndThresholdAndFraudWindow(bytes memory)
         public
         view
         virtual
         override
-        returns (address[] memory, uint8);
+        returns (
+            address[] memory,
+            uint8,
+            uint32
+        );
 
     // ============ Public Functions ============
 
@@ -72,6 +76,7 @@ abstract contract AbstractOptimisticIsm is IOptimisticIsm {
             _ism.verify(OptimisticIsmMetadata.metadataAt(_metadata), _message),
             "!verify"
         );
+        _setupFraudWindow(_metadata, _message);
         return true;
     }
 
@@ -81,7 +86,7 @@ abstract contract AbstractOptimisticIsm is IOptimisticIsm {
     }
 
     function _isWatcher(address _watcher) private view returns (bool) {
-        (address[] memory _watchers, ) = watchersAndThreshold(
+        (address[] memory _watchers, , ) = watchersAndThresholdAndFraudWindow(
             abi.encodePacked("")
         );
 
@@ -125,13 +130,33 @@ abstract contract AbstractOptimisticIsm is IOptimisticIsm {
         require(preVerify(_metadata, _message), "!verify");
         require(_verifySubIsmNotFraudulent(_message), "!fraud");
         require(_verifyTargetBlockReached(_metadata, _message), "!wait");
-        // require(!_verifyWatcherSignatures(_metadata, _message), "!fraud");
         return true;
     }
 
     // ============ Private Functions ============
 
     mapping(bytes32 => uint256) private _targetBlocks;
+
+    /**
+     * @notice Sets up a fraud window for a given message
+     * @return bool If setup was succesful
+     */
+    function _setupFraudWindow(
+        bytes calldata _metadata,
+        bytes calldata _message
+    ) internal returns (bool) {
+        bytes32 messageHash = keccak256(abi.encodePacked(_metadata, _message));
+        uint256 targetBlock = _targetBlocks[messageHash];
+        if (targetBlock == 0) {
+            (, , uint32 _fraudWindow) = watchersAndThresholdAndFraudWindow(
+                _message
+            );
+            //First time we're dealing with this message,metadta pair
+            _targetBlocks[messageHash] = block.number + _fraudWindow;
+            return true;
+        }
+        return false;
+    }
 
     /**
      * @notice Verifies that a quorum of watchers signed
@@ -143,15 +168,11 @@ abstract contract AbstractOptimisticIsm is IOptimisticIsm {
         bytes calldata _metadata,
         bytes calldata _message
     ) internal returns (bool) {
-        bytes32 messageHash = keccak256(_message); //TODO: add metadat too here
+        bytes32 messageHash = keccak256(abi.encodePacked(_metadata, _message));
         uint256 targetBlock = _targetBlocks[messageHash];
-        if (targetBlock == 0) {
-            //First time we're dealing with this message
-            _targetBlocks[messageHash] = block.number + 10; // Fraud window here
-            return false;
-        }
 
         if (block.number >= targetBlock) {
+            // Clear out memory
             _targetBlocks[messageHash] = 0;
             return true;
         }
@@ -167,50 +188,7 @@ abstract contract AbstractOptimisticIsm is IOptimisticIsm {
         view
         returns (bool)
     {
-        (, uint8 _threshold) = watchersAndThreshold(_message);
-        console.log(_threshold);
-
+        (, uint8 _threshold, ) = watchersAndThresholdAndFraudWindow(_message);
         return !(_fraudulentCount >= _threshold);
-    }
-
-    /**
-     * @notice Verifies that a quorum of watchers signed
-     * the given message.
-     * @param _metadata ABI encoded module metadata (see MultisigIsmMetadata.sol)
-     * @param _message Formatted Hyperlane message (see Message.sol).
-     */
-    function _verifyWatcherSignatures(
-        bytes calldata _metadata,
-        bytes calldata _message
-    ) internal view returns (bool) {
-        (address[] memory _watchers, uint8 _threshold) = watchersAndThreshold(
-            _message
-        );
-        require(_threshold > 0, "No threshold present for fraud message");
-        // Update the digest calculation to include only _message
-        bytes32 _digest = keccak256(_message);
-
-        uint256 _watcherCount = _watchers.length;
-        uint256 _watcherIndex = 0;
-        // Assumes that signatures are ordered by validator
-        for (uint256 i = 0; i < _threshold; ++i) {
-            address _signer = ECDSA.recover(
-                _digest,
-                OptimisticIsmMetadata.signatureAt(_metadata, i)
-            );
-            // Loop through remaining validators until we find a match
-            while (
-                _watcherIndex < _watcherCount &&
-                _signer != _watchers[_watcherIndex]
-            ) {
-                ++_watcherIndex;
-            }
-            // Return false if we never found a match
-            if (_watcherIndex >= _watcherCount) {
-                return false;
-            }
-            ++_watcherIndex;
-        }
-        return true;
     }
 }

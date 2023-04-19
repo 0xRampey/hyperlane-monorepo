@@ -12,10 +12,14 @@ interface IOptimisticIsm is IInterchainSecurityModule {
      * @return watchers The array of watcher addresses
      * @return threshold The number of signatures needed to verify
      */
-    function watchersAndThreshold(bytes calldata _message)
+    function watchersAndThresholdAndFraudWindow(bytes calldata _message)
         external
         view
-        returns (address[] memory watchers, uint8 threshold);
+        returns (
+            address[] memory watchers,
+            uint8 threshold,
+            uint32 fraudWindow
+        );
 
     /**
      * @notice Returns the ISM that is responsible for verifying _message
