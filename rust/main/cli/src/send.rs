@@ -3,9 +3,9 @@ use ethers::prelude::*;
 use ethers::providers::{Http, Provider};
 use eyre::Result;
 use hyperlane_core::{HyperlaneMessage, H160, H256};
-use hyperlane_ethereum::interfaces::mailbox::Mailbox;
 use std::str::FromStr;
 use std::sync::Arc;
+use crate::mailbox::Mailbox;
 
 #[derive(Args)]
 pub struct SendArgs {

@@ -2,11 +2,12 @@ use clap::Args;
 use ethers::providers::{Http, Provider};
 use eyre::Result;
 use hyperlane_core::{HyperlaneMessage, H160, H256};
-use hyperlane_ethereum::interfaces::mailbox::Mailbox;
 use relayer::settings::matching_list::MatchingList;
 use serde_json::json;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use crate::mailbox::Mailbox;
 
 #[derive(Args)]
 pub struct SearchArgs {

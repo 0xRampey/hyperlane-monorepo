@@ -3,6 +3,7 @@ use eyre::Result;
 
 mod search;
 mod send;
+mod mailbox;
 
 use search::SearchArgs;
 use send::SendArgs;
